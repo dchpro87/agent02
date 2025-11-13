@@ -1,21 +1,32 @@
-import { Send } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { RefObject } from "react";
 
 type ChatInputProps = {
   inputValue: string;
   setInputValue: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
   status: string;
   inputRef: RefObject<HTMLInputElement | null>;
+  isProcessing: boolean;
 };
 
 export default function ChatInput({
   inputValue,
   setInputValue,
   onSubmit,
+  onCancel,
   status,
   inputRef,
+  isProcessing,
 }: ChatInputProps) {
+  const handleButtonClick = (e: React.MouseEvent) => {
+    if (isProcessing) {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
   return (
     <div className='border-t border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm'>
       <div className='max-w-4xl mx-auto px-4 py-4'>
@@ -30,12 +41,18 @@ export default function ChatInput({
             disabled={status !== "ready"}
           />
           <button
-            type='submit'
-            disabled={status !== "ready" || !inputValue.trim()}
-            className='rounded-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2'
+            type={isProcessing ? "button" : "submit"}
+            onClick={handleButtonClick}
+            disabled={
+              !isProcessing && (status !== "ready" || !inputValue.trim())
+            }
+            className='rounded-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:from-blue-700 enabled:hover:to-purple-700 transition-all flex items-center gap-2'
           >
-            <span>Send</span>
-            <Send className='w-4 h-4' />
+            {isProcessing ? (
+              <X className='w-4 h-4' />
+            ) : (
+              <Send className='w-4 h-4' />
+            )}
           </button>
         </form>
       </div>
