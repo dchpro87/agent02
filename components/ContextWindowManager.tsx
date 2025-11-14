@@ -9,16 +9,15 @@ interface Collection {
 }
 
 interface ContextWindowManagerProps {
+  selectedCollection?: string | null;
   onCollectionSelect?: (collectionName: string | null) => void;
 }
 
 export default function ContextWindowManager({
+  selectedCollection,
   onCollectionSelect,
 }: ContextWindowManagerProps) {
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollection, setSelectedCollection] = useState<string | null>(
-    null
-  );
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
@@ -108,7 +107,6 @@ export default function ContextWindowManager({
       }
 
       if (selectedCollection === collectionName) {
-        setSelectedCollection(null);
         onCollectionSelect?.(null);
       }
       await fetchCollections();
@@ -123,7 +121,6 @@ export default function ContextWindowManager({
   const handleSelectCollection = (collectionName: string) => {
     const newSelection =
       selectedCollection === collectionName ? null : collectionName;
-    setSelectedCollection(newSelection);
     onCollectionSelect?.(newSelection);
   };
 

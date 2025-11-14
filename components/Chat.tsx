@@ -213,7 +213,9 @@ User question: ${inputValue}`;
                     ? "bg-blue-500 hover:bg-blue-600 text-white"
                     : "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
                 }`}
-                title='Toggle context manager'
+                title={
+                  selectedCollection || "Click to select context collection"
+                }
               >
                 <Database className='w-4 h-4' />
                 <span className='text-sm font-medium'>Context</span>
@@ -268,6 +270,7 @@ User question: ${inputValue}`;
             </div>
             <div className='flex-1 overflow-hidden p-4'>
               <ContextWindowManager
+                selectedCollection={selectedCollection}
                 onCollectionSelect={(collectionName) => {
                   setSelectedCollection(collectionName);
                   console.log("Selected collection:", collectionName);
