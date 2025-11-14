@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Database, Plus, Trash2, RefreshCw, Check, Folder } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Database,
+  Plus,
+  Trash2,
+  RefreshCw,
+  Check,
+  Folder,
+  Upload,
+  FileText,
+  File,
+} from "lucide-react";
 
 interface Collection {
   name: string;
@@ -22,6 +32,9 @@ export default function ContextWindowManager({
   const [isCreating, setIsCreating] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch collections on mount
   useEffect(() => {
@@ -57,12 +70,15 @@ export default function ContextWindowManager({
     setIsCreating(true);
     setError(null);
     try {
+      // Convert to snake_case: replace spaces with underscores and convert to lowercase
+      const snakeCaseName = newCollectionName.trim().replace(/\s+/g, "_");
+
       const response = await fetch("/api/chroma", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "create",
-          name: newCollectionName.trim(),
+          name: snakeCaseName,
         }),
       });
 
@@ -124,6 +140,71 @@ export default function ContextWindowManager({
     onCollectionSelect?.(newSelection);
   };
 
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedCollection) return;
+
+    // Validate file type
+    const validTypes = ["application/pdf", "text/plain"];
+    const isValidType =
+      validTypes.includes(file.type) || file.name.endsWith(".txt");
+
+    if (!isValidType) {
+      setError("Please upload a PDF or TXT file");
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    setUploadSuccess(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("collectionName", selectedCollection);
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload document");
+      }
+
+      setUploadSuccess(
+        `Successfully added ${data.chunksAdded} chunks from "${data.fileName}"`
+      );
+
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setUploadSuccess(null), 5000);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to upload document"
+      );
+      console.error("Error uploading document:", err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleUploadButtonClick = () => {
+    if (!selectedCollection) {
+      setError("Please select a collection first");
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className='flex flex-col h-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm'>
       {/* Header */}
@@ -170,6 +251,58 @@ export default function ContextWindowManager({
       {error && (
         <div className='mx-4 mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'>
           <p className='text-sm text-red-600 dark:text-red-400'>{error}</p>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {uploadSuccess && (
+        <div className='mx-4 mt-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'>
+          <p className='text-sm text-green-600 dark:text-green-400'>
+            {uploadSuccess}
+          </p>
+        </div>
+      )}
+
+      {/* Upload Section */}
+      {selectedCollection && (
+        <div className='mx-4 mt-4 p-4 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50'>
+          <div className='flex items-center justify-between mb-3'>
+            <div className='flex items-center gap-2'>
+              <FileText className='w-4 h-4 text-zinc-600 dark:text-zinc-400' />
+              <h3 className='text-sm font-medium text-zinc-900 dark:text-zinc-100'>
+                Add Documents
+              </h3>
+            </div>
+          </div>
+          <div className='flex flex-col gap-2'>
+            <input
+              ref={fileInputRef}
+              type='file'
+              accept='.pdf,.txt,text/plain,application/pdf'
+              onChange={handleFileUpload}
+              className='hidden'
+            />
+            <button
+              onClick={handleUploadButtonClick}
+              disabled={isUploading || !selectedCollection}
+              className='w-full px-4 py-3 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-zinc-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400'
+            >
+              {isUploading ? (
+                <>
+                  <RefreshCw className='w-4 h-4 animate-spin' />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className='w-4 h-4' />
+                  Upload PDF or TXT file
+                </>
+              )}
+            </button>
+            <p className='text-xs text-zinc-500 dark:text-zinc-400 text-center'>
+              Documents will be chunked and embedded automatically
+            </p>
+          </div>
         </div>
       )}
 

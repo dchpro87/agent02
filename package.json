@@ -16,6 +16,7 @@
     "next": "16.0.2",
     "ollama": "^0.6.2",
     "ollama-ai-provider-v2": "^1.5.3",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

@@ -114,7 +114,7 @@ export default function Chat() {
             action: "query",
             name: selectedCollection,
             queryEmbeddings: [embedding],
-            nResults: 1,
+            nResults: 5,
           }),
         });
 
