@@ -11,6 +11,7 @@ import {
   Upload,
   FileText,
   File,
+  X,
 } from "lucide-react";
 
 interface Collection {
@@ -34,7 +35,10 @@ export default function ContextWindowManager({
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadMessage, setUploadMessage] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch collections on mount
   useEffect(() => {
@@ -159,6 +163,11 @@ export default function ContextWindowManager({
     setIsUploading(true);
     setError(null);
     setUploadSuccess(null);
+    setUploadProgress(0);
+    setUploadMessage("Starting upload...");
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
 
     try {
       const formData = new FormData();
@@ -166,34 +175,86 @@ export default function ContextWindowManager({
       formData.append("collectionName", selectedCollection);
 
       const response = await fetch("/api/documents/upload", {
-        method: "POST",
+        method: "PUT", // Use PUT for streaming endpoint
         body: formData,
+        signal: abortControllerRef.current.signal,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to upload document");
+      if (!response.ok || !response.body) {
+        throw new Error("Failed to upload document");
       }
 
-      setUploadSuccess(
-        `Successfully added ${data.chunksAdded} chunks from "${data.fileName}"`
-      );
+      // Read the stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-      // Clear the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+              if (data.progress !== undefined) {
+                setUploadProgress(data.progress);
+              }
+
+              if (data.message) {
+                setUploadMessage(data.message);
+              }
+
+              if (data.status === "complete") {
+                setUploadSuccess(
+                  `Successfully added ${data.chunksAdded} chunks from "${data.fileName}"`
+                );
+
+                // Clear the file input
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                }
+
+                // Clear success message after 5 seconds
+                setTimeout(() => {
+                  setUploadSuccess(null);
+                  setUploadProgress(0);
+                  setUploadMessage("");
+                }, 5000);
+              }
+            } catch (parseError) {
+              console.error("Error parsing SSE data:", parseError);
+            }
+          }
+        }
       }
-
-      // Clear success message after 5 seconds
-      setTimeout(() => setUploadSuccess(null), 5000);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to upload document"
-      );
-      console.error("Error uploading document:", err);
+      if (err instanceof Error && err.name === "AbortError") {
+        setError("Upload cancelled");
+        console.log("Upload cancelled by user");
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Failed to upload document"
+        );
+        console.error("Error uploading document:", err);
+      }
     } finally {
       setIsUploading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setUploadMessage("Cancelling upload...");
     }
   };
 
@@ -217,7 +278,7 @@ export default function ContextWindowManager({
         </div>
         <button
           onClick={fetchCollections}
-          disabled={isLoading}
+          disabled={isLoading || isUploading}
           className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors disabled:opacity-50'
           title='Refresh collections'
         >
@@ -234,11 +295,11 @@ export default function ContextWindowManager({
             onChange={(e) => setNewCollectionName(e.target.value)}
             placeholder='New collection name...'
             className='flex-1 px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm'
-            disabled={isCreating}
+            disabled={isCreating || isUploading}
           />
           <button
             type='submit'
-            disabled={isCreating || !newCollectionName.trim()}
+            disabled={isCreating || !newCollectionName.trim() || isUploading}
             className='px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium'
           >
             <Plus className='w-4 h-4' />
@@ -266,43 +327,74 @@ export default function ContextWindowManager({
       {/* Upload Section */}
       {selectedCollection && (
         <div className='mx-4 mt-4 p-4 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50'>
-          <div className='flex items-center justify-between mb-3'>
-            <div className='flex items-center gap-2'>
-              <FileText className='w-4 h-4 text-zinc-600 dark:text-zinc-400' />
-              <h3 className='text-sm font-medium text-zinc-900 dark:text-zinc-100'>
-                Add Documents
-              </h3>
-            </div>
-          </div>
-          <div className='flex flex-col gap-2'>
-            <input
-              ref={fileInputRef}
-              type='file'
-              accept='.pdf,.txt,text/plain,application/pdf'
-              onChange={handleFileUpload}
-              className='hidden'
-            />
-            <button
-              onClick={handleUploadButtonClick}
-              disabled={isUploading || !selectedCollection}
-              className='w-full px-4 py-3 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-zinc-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400'
-            >
-              {isUploading ? (
-                <>
-                  <RefreshCw className='w-4 h-4 animate-spin' />
-                  Uploading...
-                </>
-              ) : (
-                <>
+          {!isUploading ? (
+            <>
+              <div className='flex items-center justify-between mb-3'>
+                <div className='flex items-center gap-2'>
+                  <FileText className='w-4 h-4 text-zinc-600 dark:text-zinc-400' />
+                  <h3 className='text-sm font-medium text-zinc-900 dark:text-zinc-100'>
+                    Add Documents
+                  </h3>
+                </div>
+              </div>
+              <div className='flex flex-col gap-2'>
+                <input
+                  ref={fileInputRef}
+                  type='file'
+                  accept='.pdf,.txt,text/plain,application/pdf'
+                  onChange={handleFileUpload}
+                  className='hidden'
+                />
+                <button
+                  onClick={handleUploadButtonClick}
+                  disabled={isUploading || !selectedCollection}
+                  className='w-full px-4 py-3 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-600 hover:border-blue-400 dark:hover:border-blue-500 bg-white dark:bg-zinc-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400'
+                >
                   <Upload className='w-4 h-4' />
                   Upload PDF or TXT file
-                </>
-              )}
-            </button>
-            <p className='text-xs text-zinc-500 dark:text-zinc-400 text-center'>
-              Documents will be chunked and embedded automatically
-            </p>
-          </div>
+                </button>
+                <p className='text-xs text-zinc-500 dark:text-zinc-400 text-center'>
+                  Documents will be chunked and embedded automatically
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className='space-y-3'>
+              <div className='flex items-center justify-between'>
+                <div className='flex items-center gap-2'>
+                  <RefreshCw className='w-4 h-4 text-blue-500 animate-spin' />
+                  <h3 className='text-sm font-medium text-zinc-900 dark:text-zinc-100'>
+                    Processing Document
+                  </h3>
+                </div>
+                <span className='text-sm font-semibold text-blue-600 dark:text-blue-400'>
+                  {uploadProgress}%
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className='w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2.5 overflow-hidden'>
+                <div
+                  className='bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out'
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+
+              {/* Progress Message */}
+              <p className='text-xs text-zinc-600 dark:text-zinc-400 text-center'>
+                {uploadMessage}
+              </p>
+
+              {/* Cancel Button */}
+              <button
+                onClick={handleCancelUpload}
+                className='w-full px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center justify-center gap-2 text-sm font-medium'
+              >
+                <X className='w-4 h-4' />
+                Cancel Upload
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -327,12 +419,18 @@ export default function ContextWindowManager({
             {collections.map((collection) => (
               <div
                 key={collection.name}
-                className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
+                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                  isUploading
+                    ? "cursor-not-allowed opacity-50"
+                    : "cursor-pointer"
+                } ${
                   selectedCollection === collection.name
                     ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
                     : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600"
                 }`}
-                onClick={() => handleSelectCollection(collection.name)}
+                onClick={() =>
+                  !isUploading && handleSelectCollection(collection.name)
+                }
               >
                 <div className='flex items-center gap-3 flex-1 min-w-0'>
                   <div
@@ -363,9 +461,12 @@ export default function ContextWindowManager({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteCollection(collection.name);
+                    if (!isUploading) {
+                      handleDeleteCollection(collection.name);
+                    }
                   }}
-                  className='p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0'
+                  disabled={isUploading}
+                  className='p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed'
                   title='Delete collection'
                 >
                   <Trash2 className='w-4 h-4' />

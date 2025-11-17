@@ -123,7 +123,6 @@ export default function Chat() {
         }
 
         const { results } = await chromaResponse.json();
-        console.log("ChromaDB results:", results);
 
         // Extract documents from results
         if (results.documents && results.documents[0]) {

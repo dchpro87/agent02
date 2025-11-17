@@ -8,10 +8,7 @@ import {
 } from "@/lib/documentProcessing";
 
 // Configure PDF.js worker for Node.js environment - use legacy build for Node.js
-import {
-  getDocument,
-  GlobalWorkerOptions,
-} from "pdfjs-dist/legacy/build/pdf.mjs";
+import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // Set worker to use the legacy worker which works in Node.js
 GlobalWorkerOptions.workerSrc = new URL(
@@ -171,4 +168,195 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Streaming upload endpoint with progress tracking
+export async function PUT(request: NextRequest) {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
+
+      try {
+        console.log("Streaming document upload request received");
+        const formData = await request.formData();
+        const file = formData.get("file") as File;
+        const collectionName = formData.get("collectionName") as string;
+
+        if (!file) {
+          send({ error: "No file provided", progress: 0 });
+          controller.close();
+          return;
+        }
+
+        if (!collectionName) {
+          send({ error: "Collection name is required", progress: 0 });
+          controller.close();
+          return;
+        }
+
+        send({ status: "started", progress: 0, message: "Starting upload..." });
+
+        // Get the collection
+        let collection;
+        try {
+          collection = await chromaClient.getCollection({
+            name: collectionName,
+          });
+          send({
+            status: "collection_found",
+            progress: 5,
+            message: "Collection found",
+          });
+        } catch {
+          send({
+            error: `Collection "${collectionName}" not found`,
+            progress: 0,
+          });
+          controller.close();
+          return;
+        }
+
+        // Extract text
+        let text = "";
+        const fileType = file.type;
+        const fileName = file.name;
+        const fileSize = file.size;
+
+        send({
+          status: "extracting",
+          progress: 10,
+          message: "Extracting text...",
+        });
+
+        if (fileType === "application/pdf") {
+          const arrayBuffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const pdfParser = new PDFParse({ data: uint8Array });
+          const textResult = await pdfParser.getText();
+          text = textResult.text;
+          await pdfParser.destroy();
+        } else if (fileType === "text/plain" || fileName.endsWith(".txt")) {
+          text = await file.text();
+        } else {
+          send({ error: "Unsupported file type", progress: 0 });
+          controller.close();
+          return;
+        }
+
+        if (!text || text.trim().length === 0) {
+          send({ error: "No text content found", progress: 0 });
+          controller.close();
+          return;
+        }
+
+        send({
+          status: "chunking",
+          progress: 15,
+          message: "Creating chunks...",
+        });
+
+        // Split into chunks
+        const chunks = chunkText(text, 1000, 100);
+        const totalChunks = chunks.length;
+        const timestamp = Date.now();
+
+        send({
+          status: "embedding",
+          progress: 20,
+          message: `Embedding ${totalChunks} chunks...`,
+          totalChunks,
+        });
+
+        // Generate embeddings with progress updates
+        const embeddings: number[][] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+
+          const embeddingResponse = await fetch(
+            `${request.nextUrl.origin}/api/generate-embedding`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: chunk }),
+            }
+          );
+
+          if (!embeddingResponse.ok) {
+            const errorData = await embeddingResponse.json();
+            send({
+              error: errorData.error || "Failed to generate embedding",
+              progress: 0,
+            });
+            controller.close();
+            return;
+          }
+
+          const embeddingData = await embeddingResponse.json();
+          embeddings.push(embeddingData.embedding);
+
+          // Calculate progress (20% to 90% for embedding phase)
+          const embeddingProgress =
+            20 + Math.floor(((i + 1) / totalChunks) * 70);
+          send({
+            status: "embedding",
+            progress: embeddingProgress,
+            currentChunk: i + 1,
+            totalChunks,
+            message: `Embedding chunk ${i + 1}/${totalChunks}...`,
+          });
+        }
+
+        send({
+          status: "saving",
+          progress: 95,
+          message: "Saving to database...",
+        });
+
+        // Prepare and add to collection
+        const ids = chunks.map((_, index) =>
+          generateChunkId(fileName, index, timestamp)
+        );
+        const metadatas = chunks.map((_, index) =>
+          extractMetadata(fileName, fileType, fileSize, index, chunks.length)
+        );
+
+        await collection.add({
+          ids,
+          embeddings,
+          documents: chunks,
+          metadatas,
+        });
+
+        send({
+          status: "complete",
+          progress: 100,
+          message: `Successfully added ${chunks.length} chunks`,
+          chunksAdded: chunks.length,
+          fileName,
+          fileSize,
+        });
+
+        controller.close();
+      } catch (error) {
+        console.error("Streaming upload error:", error);
+        send({
+          error: error instanceof Error ? error.message : "Upload failed",
+          progress: 0,
+        });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

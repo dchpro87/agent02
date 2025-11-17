@@ -42,7 +42,7 @@ export default function MessageContainer({
         {messages.length === 0 && (
           <div className='text-center py-12'>
             <p className='text-zinc-600 dark:text-zinc-400'>
-              Ask me anything to get started
+              What can I help you with today?
             </p>
           </div>
         )}
