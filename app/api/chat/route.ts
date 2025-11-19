@@ -11,13 +11,19 @@ const ollama = createOllama({
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
-  const { messages, model }: { messages: UIMessage[]; model?: string } =
+  const {
+    messages,
+    model,
+    systemPrompt,
+  }: { messages: UIMessage[]; model?: string; systemPrompt?: string } =
     await req.json();
 
   console.log("Received model:", model);
+  console.log("System prompt:", systemPrompt ? "Yes" : "No");
 
   const result = streamText({
     model: ollama(model || "granite4"),
+    system: systemPrompt,
     messages: convertToModelMessages(messages),
     abortSignal: req.signal,
   });

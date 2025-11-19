@@ -1,4 +1,4 @@
-import { Bot, User } from "lucide-react";
+import { Bot, User, Database } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 type Message = {
@@ -10,11 +10,13 @@ type Message = {
 type MessageContainerProps = {
   messages: Message[];
   status: string;
+  isQueryingKnowledge?: boolean;
 };
 
 export default function MessageContainer({
   messages,
   status,
+  isQueryingKnowledge = false,
 }: MessageContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +79,26 @@ export default function MessageContainer({
             )}
           </div>
         ))}
+
+        {isQueryingKnowledge && (
+          <div className='flex gap-3 justify-start'>
+            <div className='w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center flex-shrink-0'>
+              <Database className='w-5 h-5 text-white' />
+            </div>
+            <div className='rounded-2xl px-4 py-3 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'>
+              <div className='flex gap-2 items-center'>
+                <span className='text-sm text-zinc-600 dark:text-zinc-400'>
+                  Querying knowledge base
+                </span>
+                <div className='flex gap-1 items-center'>
+                  <div className='w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.3s]'></div>
+                  <div className='w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.15s]'></div>
+                  <div className='w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce'></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {status === "submitted" && (
           <div className='flex gap-3 justify-start'>

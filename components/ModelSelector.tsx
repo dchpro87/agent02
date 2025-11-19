@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import { MODEL_DATABASE } from "@/lib/model-database";
 
 type ModelSelectorProps = {
   models: string[];
@@ -13,6 +14,20 @@ export default function ModelSelector({
   onModelChange,
   isLoading,
 }: ModelSelectorProps) {
+  // Helper function to get capability badges for a model
+  const getCapabilityBadges = (modelName: string): string => {
+    const capabilities = MODEL_DATABASE[modelName];
+    if (!capabilities) return "";
+
+    const badges: string[] = [];
+    if (capabilities.tools) badges.push("🔧");
+    if (capabilities.vision) badges.push("👁️");
+    if (capabilities.reasoning) badges.push("🧠");
+    if (capabilities.embedding) badges.push("📊");
+
+    return badges.length > 0 ? ` ${badges.join(" ")}` : "";
+  };
+
   return (
     <div className='relative'>
       <select
@@ -29,6 +44,7 @@ export default function ModelSelector({
           models.map((model) => (
             <option key={model} value={model}>
               {model}
+              {getCapabilityBadges(model)}
             </option>
           ))
         )}
