@@ -1,53 +1,125 @@
 /**
- * Split text into chunks for embedding
+ * Split text into chunks for embedding with improved semantic boundaries
+ * Optimized for nomic-embed-text model which works best with 512-1024 characters
  * @param text - The text to split into chunks
- * @param chunkSize - Maximum characters per chunk (default: 1000)
+ * @param chunkSize - Maximum characters per chunk (default: 800 - optimal for embeddings)
  * @param overlap - Number of characters to overlap between chunks (default: 200)
  * @returns Array of text chunks
  */
 export function chunkText(
   text: string,
-  chunkSize: number = 1000,
+  chunkSize: number = 800,
   overlap: number = 200
 ): string[] {
   const chunks: string[] = [];
 
-  // Clean up the text - normalize whitespace
-  const cleanText = text.replace(/\s+/g, " ").trim();
+  // Preserve paragraph structure but normalize whitespace within paragraphs
+  // Split on double newlines to preserve paragraph boundaries
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s+/g, ' ').trim());
 
-  // If text is shorter than chunk size, return as single chunk
-  if (cleanText.length <= chunkSize) {
-    return [cleanText];
+  let currentChunk = '';
+  let previousOverlap = '';
+
+  for (const paragraph of paragraphs) {
+    if (!paragraph) continue;
+
+    // If adding this paragraph would exceed chunk size
+    if (currentChunk.length + paragraph.length + 1 > chunkSize) {
+      // If current chunk has content, save it
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+
+        // Calculate overlap for next chunk
+        const overlapStart = Math.max(0, currentChunk.length - overlap);
+        previousOverlap = currentChunk.slice(overlapStart).trim();
+      }
+
+      // If paragraph itself is larger than chunk size, split it
+      if (paragraph.length > chunkSize) {
+        const subChunks = splitLongText(paragraph, chunkSize, overlap);
+
+        for (let i = 0; i < subChunks.length; i++) {
+          if (i === 0 && previousOverlap) {
+            chunks.push((previousOverlap + ' ' + subChunks[i]).trim());
+          } else {
+            chunks.push(subChunks[i]);
+          }
+        }
+
+        // Set up overlap for next chunk
+        const lastSubChunk = subChunks[subChunks.length - 1];
+        const overlapStart = Math.max(0, lastSubChunk.length - overlap);
+        previousOverlap = lastSubChunk.slice(overlapStart).trim();
+        currentChunk = '';
+      } else {
+        // Start new chunk with overlap and this paragraph
+        currentChunk = previousOverlap
+          ? previousOverlap + ' ' + paragraph
+          : paragraph;
+      }
+    } else {
+      // Add paragraph to current chunk
+      currentChunk = currentChunk ? currentChunk + ' ' + paragraph : paragraph;
+    }
   }
 
-  // Ensure overlap is smaller than chunk size
-  const effectiveOverlap = Math.min(overlap, Math.floor(chunkSize * 0.5));
+  // Add final chunk if it has content
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk.trim());
+  }
 
+  // Filter out empty chunks and very small chunks (< 50 chars)
+  return chunks.filter((chunk) => chunk.length >= 50);
+}
+
+/**
+ * Helper function to split long text that exceeds chunk size
+ * Uses sentence boundaries for more natural splits
+ */
+function splitLongText(
+  text: string,
+  chunkSize: number,
+  overlap: number
+): string[] {
+  const chunks: string[] = [];
   let position = 0;
 
-  while (position < cleanText.length) {
-    // Determine the end of this chunk
-    let chunkEnd = Math.min(position + chunkSize, cleanText.length);
+  while (position < text.length) {
+    let chunkEnd = Math.min(position + chunkSize, text.length);
 
-    // If we're not at the end of the text, try to find a good break point
-    if (chunkEnd < cleanText.length) {
-      // Look backwards from chunkEnd to find a sentence boundary
+    // Try to find a good breaking point
+    if (chunkEnd < text.length) {
+      // Look for sentence endings (., !, ?) followed by space
       let foundBoundary = false;
 
-      // First try to find sentence endings (., !, ?)
-      for (let i = chunkEnd; i > position + chunkSize * 0.5; i--) {
-        const char = cleanText[i - 1];
-        if (char === "." || char === "!" || char === "?") {
+      // Search backwards from chunkEnd, but not more than 30% back
+      const searchStart = Math.max(
+        position + Math.floor(chunkSize * 0.7),
+        position
+      );
+
+      for (let i = chunkEnd; i > searchStart; i--) {
+        const char = text[i - 1];
+        const nextChar = text[i];
+
+        // Look for sentence boundaries
+        if (
+          (char === '.' || char === '!' || char === '?') &&
+          nextChar === ' '
+        ) {
           chunkEnd = i;
           foundBoundary = true;
           break;
         }
       }
 
-      // If no sentence boundary, try to find a space
+      // If no sentence boundary, look for comma or space
       if (!foundBoundary) {
-        for (let i = chunkEnd; i > position + chunkSize * 0.5; i--) {
-          if (cleanText[i - 1] === " ") {
+        for (let i = chunkEnd; i > searchStart; i--) {
+          const char = text[i - 1];
+          if (char === ',' || char === ' ') {
             chunkEnd = i;
             break;
           }
@@ -55,20 +127,22 @@ export function chunkText(
       }
     }
 
-    // Extract the chunk
-    const chunk = cleanText.slice(position, chunkEnd).trim();
-
+    // Extract chunk
+    const chunk = text.slice(position, chunkEnd).trim();
     if (chunk.length > 0) {
       chunks.push(chunk);
     }
 
-    // Move position forward
-    // The step size is chunkSize - overlap to create the overlap effect
-    position += chunkSize - effectiveOverlap;
+    // Move forward with overlap
+    position = chunkEnd;
 
-    // Safety check: if we didn't make progress, force move forward
-    if (position <= (chunks.length > 0 ? chunkEnd - chunkSize : 0)) {
-      position = chunkEnd;
+    // If there's more text, go back by overlap amount to create overlap
+    if (position < text.length && chunks.length > 0) {
+      position = Math.max(position - overlap, chunkEnd - overlap);
+      // Adjust to word boundary
+      while (position > 0 && position < text.length && text[position] !== ' ') {
+        position++;
+      }
     }
   }
 

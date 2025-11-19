@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react';
 import {
   Database,
   Plus,
@@ -12,7 +12,7 @@ import {
   FileText,
   File,
   X,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface Collection {
   name: string;
@@ -31,12 +31,12 @@ export default function ContextWindowManager({
   const [collections, setCollections] = useState<Collection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState("");
+  const [newCollectionName, setNewCollectionName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadMessage, setUploadMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -49,19 +49,19 @@ export default function ContextWindowManager({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/chroma?action=list");
+      const response = await fetch('/api/chroma?action=list');
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch collections");
+        throw new Error(data.error || 'Failed to fetch collections');
       }
 
       setCollections(data.collections || []);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to fetch collections"
+        err instanceof Error ? err.message : 'Failed to fetch collections'
       );
-      console.error("Error fetching collections:", err);
+      console.error('Error fetching collections:', err);
     } finally {
       setIsLoading(false);
     }
@@ -75,13 +75,13 @@ export default function ContextWindowManager({
     setError(null);
     try {
       // Convert to snake_case: replace spaces with underscores and convert to lowercase
-      const snakeCaseName = newCollectionName.trim().replace(/\s+/g, "_");
+      const snakeCaseName = newCollectionName.trim().replace(/\s+/g, '_');
 
-      const response = await fetch("/api/chroma", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/chroma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: "create",
+          action: 'create',
           name: snakeCaseName,
         }),
       });
@@ -89,16 +89,16 @@ export default function ContextWindowManager({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create collection");
+        throw new Error(data.error || 'Failed to create collection');
       }
 
-      setNewCollectionName("");
+      setNewCollectionName('');
       await fetchCollections();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to create collection"
+        err instanceof Error ? err.message : 'Failed to create collection'
       );
-      console.error("Error creating collection:", err);
+      console.error('Error creating collection:', err);
     } finally {
       setIsCreating(false);
     }
@@ -114,16 +114,16 @@ export default function ContextWindowManager({
 
     setError(null);
     try {
-      const response = await fetch("/api/chroma", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/chroma', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: collectionName }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to delete collection");
+        throw new Error(data.error || 'Failed to delete collection');
       }
 
       if (selectedCollection === collectionName) {
@@ -132,9 +132,9 @@ export default function ContextWindowManager({
       await fetchCollections();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to delete collection"
+        err instanceof Error ? err.message : 'Failed to delete collection'
       );
-      console.error("Error deleting collection:", err);
+      console.error('Error deleting collection:', err);
     }
   };
 
@@ -151,12 +151,12 @@ export default function ContextWindowManager({
     if (!file || !selectedCollection) return;
 
     // Validate file type
-    const validTypes = ["application/pdf", "text/plain"];
+    const validTypes = ['application/pdf', 'text/plain'];
     const isValidType =
-      validTypes.includes(file.type) || file.name.endsWith(".txt");
+      validTypes.includes(file.type) || file.name.endsWith('.txt');
 
     if (!isValidType) {
-      setError("Please upload a PDF or TXT file");
+      setError('Please upload a PDF or TXT file');
       return;
     }
 
@@ -164,24 +164,24 @@ export default function ContextWindowManager({
     setError(null);
     setUploadSuccess(null);
     setUploadProgress(0);
-    setUploadMessage("Starting upload...");
+    setUploadMessage('Starting upload...');
 
     // Create abort controller for cancellation
     abortControllerRef.current = new AbortController();
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("collectionName", selectedCollection);
+      formData.append('file', file);
+      formData.append('collectionName', selectedCollection);
 
-      const response = await fetch("/api/documents/upload", {
-        method: "PUT", // Use PUT for streaming endpoint
+      const response = await fetch('/api/documents/upload', {
+        method: 'PUT', // Use PUT for streaming endpoint
         body: formData,
         signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok || !response.body) {
-        throw new Error("Failed to upload document");
+        throw new Error('Failed to upload document');
       }
 
       // Read the stream
@@ -193,14 +193,17 @@ export default function ContextWindowManager({
         if (done) break;
 
         const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        const lines = chunk.split('\n');
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
+          if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
 
+              console.log('[Upload] SSE message:', data);
+
               if (data.error) {
+                console.error('[Upload] Server error:', data.error);
                 throw new Error(data.error);
               }
 
@@ -212,38 +215,46 @@ export default function ContextWindowManager({
                 setUploadMessage(data.message);
               }
 
-              if (data.status === "complete") {
+              if (data.status === 'complete') {
                 setUploadSuccess(
                   `Successfully added ${data.chunksAdded} chunks from "${data.fileName}"`
                 );
 
                 // Clear the file input
                 if (fileInputRef.current) {
-                  fileInputRef.current.value = "";
+                  fileInputRef.current.value = '';
                 }
 
                 // Clear success message after 5 seconds
                 setTimeout(() => {
                   setUploadSuccess(null);
                   setUploadProgress(0);
-                  setUploadMessage("");
+                  setUploadMessage('');
                 }, 5000);
               }
             } catch (parseError) {
-              console.error("Error parsing SSE data:", parseError);
+              console.error('[Upload] Error parsing SSE data:', parseError);
+              // Only re-throw if it's an actual error from the server
+              if (
+                parseError instanceof Error &&
+                parseError.message &&
+                !parseError.message.includes('JSON')
+              ) {
+                throw parseError;
+              }
             }
           }
         }
       }
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setError("Upload cancelled");
-        console.log("Upload cancelled by user");
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Upload cancelled');
+        console.log('Upload cancelled by user');
       } else {
         setError(
-          err instanceof Error ? err.message : "Failed to upload document"
+          err instanceof Error ? err.message : 'Failed to upload document'
         );
-        console.error("Error uploading document:", err);
+        console.error('Error uploading document:', err);
       }
     } finally {
       setIsUploading(false);
@@ -254,13 +265,13 @@ export default function ContextWindowManager({
   const handleCancelUpload = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      setUploadMessage("Cancelling upload...");
+      setUploadMessage('Cancelling upload...');
     }
   };
 
   const handleUploadButtonClick = () => {
     if (!selectedCollection) {
-      setError("Please select a collection first");
+      setError('Please select a collection first');
       return;
     }
     fileInputRef.current?.click();
@@ -282,7 +293,7 @@ export default function ContextWindowManager({
           className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors disabled:opacity-50'
           title='Refresh collections'
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
@@ -421,12 +432,12 @@ export default function ContextWindowManager({
                 key={collection.name}
                 className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
                   isUploading
-                    ? "cursor-not-allowed opacity-50"
-                    : "cursor-pointer"
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer'
                 } ${
                   selectedCollection === collection.name
-                    ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                    : "bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600"
+                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                    : 'bg-white dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}
                 onClick={() =>
                   !isUploading && handleSelectCollection(collection.name)
@@ -436,8 +447,8 @@ export default function ContextWindowManager({
                   <div
                     className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       selectedCollection === collection.name
-                        ? "bg-blue-500"
-                        : "bg-zinc-200 dark:bg-zinc-700"
+                        ? 'bg-blue-500'
+                        : 'bg-zinc-200 dark:bg-zinc-700'
                     }`}
                   >
                     {selectedCollection === collection.name ? (
@@ -483,7 +494,7 @@ export default function ContextWindowManager({
           <div className='flex items-center gap-2'>
             <div className='w-2 h-2 rounded-full bg-green-500 animate-pulse'></div>
             <p className='text-xs text-zinc-600 dark:text-zinc-400'>
-              Using collection:{" "}
+              Using collection:{' '}
               <span className='font-medium text-zinc-900 dark:text-zinc-100'>
                 {selectedCollection}
               </span>
