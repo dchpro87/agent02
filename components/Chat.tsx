@@ -10,6 +10,7 @@ import ModelSelector from "./ModelSelector";
 import SystemPromptSelector from "./SystemPromptSelector";
 import ContextWindowManager from "./ContextWindowManager";
 import { PREDEFINED_PROMPTS } from "@/lib/predefined-system-prompts";
+import { MODEL_DATABASE } from "@/lib/model-database";
 
 export default function Chat() {
   const [inputValue, setInputValue] = useState("");
@@ -73,10 +74,15 @@ export default function Chat() {
     const controller = new AbortController();
     setAbortController(controller);
 
+    // Check if the selected model supports tools
+    const modelCapabilities = MODEL_DATABASE[selectedModel];
+    const modelSupportsTools = modelCapabilities?.tools || false;
+
     let contextDocuments: string[] = [];
 
-    // If a collection is selected, perform RAG flow
-    if (selectedCollection) {
+    // If model doesn't support tools but collection is selected, use manual RAG
+    if (selectedCollection && !modelSupportsTools) {
+      console.log("Using manual RAG flow (model doesn't support tools)");
       setIsQueryingKnowledge(true);
       try {
         // Step 1: Generate optimized search query from user message
@@ -155,11 +161,11 @@ export default function Chat() {
       }
     }
 
-    // Step 4: Send message with context to LLM
+    // Prepare message text
     let messageText = inputValue;
 
+    // If manual RAG was performed and context was found, prepend it
     if (contextDocuments.length > 0) {
-      // Prepend context to the message
       const contextSection = contextDocuments
         .map((doc, idx) => `[Context ${idx + 1}]: ${doc}`)
         .join("\n\n");
@@ -176,12 +182,21 @@ User question: ${inputValue}`;
       (p) => p.id === selectedPromptId
     );
 
+    //if model supports tools, then append additional instruction to use tools to the system prompt
+    // if (modelSupportsTools && selectedPrompt) {
+    //   selectedPrompt.prompt +=
+    //     "\n\nYou have access to external tools to assist in answering the user's question. Use them as needed.";
+    // }
+
+    // Send message to LLM with model capabilities and collection info
     sendMessage(
       { text: messageText },
       {
         body: {
           model: selectedModel,
           systemPrompt: selectedPrompt?.prompt,
+          modelSupportsTools,
+          selectedCollection,
         },
       }
     );
@@ -217,7 +232,7 @@ User question: ${inputValue}`;
               </div>
               <div>
                 <h1 className='text-xl font-semibold text-zinc-900 dark:text-zinc-100'>
-                  AI Assistant
+                  AI Monkey
                 </h1>
                 <p className='text-sm text-zinc-500 dark:text-zinc-400'>
                   Powered by Ollama

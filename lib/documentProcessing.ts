@@ -8,8 +8,8 @@
  */
 export function chunkText(
   text: string,
-  chunkSize: number = 800,
-  overlap: number = 200
+  chunkSize: number = 1700,
+  overlap: number = 250
 ): string[] {
   const chunks: string[] = [];
 
@@ -17,10 +17,10 @@ export function chunkText(
   // Split on double newlines to preserve paragraph boundaries
   const paragraphs = text
     .split(/\n\s*\n/)
-    .map((p) => p.replace(/\s+/g, ' ').trim());
+    .map((p) => p.replace(/\s+/g, " ").trim());
 
-  let currentChunk = '';
-  let previousOverlap = '';
+  let currentChunk = "";
+  let previousOverlap = "";
 
   for (const paragraph of paragraphs) {
     if (!paragraph) continue;
@@ -42,7 +42,7 @@ export function chunkText(
 
         for (let i = 0; i < subChunks.length; i++) {
           if (i === 0 && previousOverlap) {
-            chunks.push((previousOverlap + ' ' + subChunks[i]).trim());
+            chunks.push((previousOverlap + " " + subChunks[i]).trim());
           } else {
             chunks.push(subChunks[i]);
           }
@@ -52,16 +52,16 @@ export function chunkText(
         const lastSubChunk = subChunks[subChunks.length - 1];
         const overlapStart = Math.max(0, lastSubChunk.length - overlap);
         previousOverlap = lastSubChunk.slice(overlapStart).trim();
-        currentChunk = '';
+        currentChunk = "";
       } else {
         // Start new chunk with overlap and this paragraph
         currentChunk = previousOverlap
-          ? previousOverlap + ' ' + paragraph
+          ? previousOverlap + " " + paragraph
           : paragraph;
       }
     } else {
       // Add paragraph to current chunk
-      currentChunk = currentChunk ? currentChunk + ' ' + paragraph : paragraph;
+      currentChunk = currentChunk ? currentChunk + " " + paragraph : paragraph;
     }
   }
 
@@ -106,8 +106,8 @@ function splitLongText(
 
         // Look for sentence boundaries
         if (
-          (char === '.' || char === '!' || char === '?') &&
-          nextChar === ' '
+          (char === "." || char === "!" || char === "?") &&
+          nextChar === " "
         ) {
           chunkEnd = i;
           foundBoundary = true;
@@ -119,7 +119,7 @@ function splitLongText(
       if (!foundBoundary) {
         for (let i = chunkEnd; i > searchStart; i--) {
           const char = text[i - 1];
-          if (char === ',' || char === ' ') {
+          if (char === "," || char === " ") {
             chunkEnd = i;
             break;
           }
@@ -140,7 +140,7 @@ function splitLongText(
     if (position < text.length && chunks.length > 0) {
       position = Math.max(position - overlap, chunkEnd - overlap);
       // Adjust to word boundary
-      while (position > 0 && position < text.length && text[position] !== ' ') {
+      while (position > 0 && position < text.length && text[position] !== " ") {
         position++;
       }
     }

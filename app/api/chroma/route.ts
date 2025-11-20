@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Handle POST requests for creating collections and querying embeddings
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { action, name, metadata, queryEmbeddings, nResults } = body;
