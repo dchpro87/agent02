@@ -8,8 +8,8 @@
  */
 export function chunkText(
   text: string,
-  chunkSize: number = 1700,
-  overlap: number = 250
+  chunkSize: number = 800,
+  overlap: number = 200
 ): string[] {
   const chunks: string[] = [];
 

@@ -1,7 +1,7 @@
 import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
 import { createOllama } from "ollama-ai-provider-v2";
 import { OLLAMA_BASE_URL } from "@/constants";
-import { getAdditionalContext } from "@/lib/tools";
+import { createGetAdditionalContextTool } from "@/lib/tools";
 
 // Configure Ollama provider with custom server URL
 const ollama = createOllama({
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     // Add system prompt instruction with collection information
     const toolInstruction = `\n\nINSTRUCTION 1: You have access to external tools to assist in answering the user's question. Always attempt to use them to enhance your responses.`;
     const collectionInstruction = selectedCollection
-      ? `\n\nINSTRUCTION 2: ALWAYS use the '${selectedCollection}' collection with the getAdditionalContext tool to provide the most relevant information.`
+      ? `\n\nINSTRUCTION 2: If you require additional context use the getAdditionalContext tool with the '${selectedCollection}' collection to provide the most relevant information.`
       : ` No specific collection was selected. You will have to remind the user to select a collection if needed.`;
     const enhancedSystemPrompt = modelSupportsTools
       ? (systemPrompt || "") + toolInstruction + collectionInstruction
@@ -53,7 +53,9 @@ export async function POST(req: Request) {
       messages: convertToModelMessages(messages),
       abortSignal: req.signal,
       tools: {
-        getAdditionalContext,
+        getAdditionalContext: createGetAdditionalContextTool(
+          selectedCollection || undefined
+        ),
       },
       // Enable multi-step tool calling - model can use tools and then respond
       stopWhen: stepCountIs(5),

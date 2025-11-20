@@ -6,6 +6,12 @@ import {
   generateChunkId,
   extractMetadata,
 } from "@/lib/documentProcessing";
+import {
+  CHUNK_SIZE,
+  CHUNK_OVERLAP,
+  MAX_BATCH_SIZE,
+  CHROMA_MAX_BATCH,
+} from "@/constants";
 
 // Configure PDF.js worker for Node.js environment - use legacy build for Node.js
 import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -119,7 +125,7 @@ export async function PUT(request: NextRequest) {
         });
 
         // Split into chunks with optimized parameters
-        const chunks = chunkText(text, 1700, 250);
+        const chunks = chunkText(text, CHUNK_SIZE, CHUNK_OVERLAP);
         const totalChunks = chunks.length;
         const timestamp = Date.now();
 
@@ -136,7 +142,6 @@ export async function PUT(request: NextRequest) {
 
         // Generate embeddings using batch processing
         // For very large documents, process in smaller batches to avoid timeouts
-        const MAX_BATCH_SIZE = 50; // Process max 50 chunks at a time
         let embeddings: number[][] = [];
 
         if (totalChunks > MAX_BATCH_SIZE) {
@@ -297,7 +302,7 @@ export async function PUT(request: NextRequest) {
 
         // ChromaDB has a max batch size of ~5461 records
         // For large documents, we need to batch the add operation too
-        const CHROMA_MAX_BATCH = 5000; // Stay safely under the limit
+        // const CHROMA_MAX_BATCH = 5000; // Stay safely under the limit
 
         if (totalChunks > CHROMA_MAX_BATCH) {
           console.log(
