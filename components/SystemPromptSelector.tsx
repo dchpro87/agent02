@@ -7,11 +7,13 @@ import {
 type SystemPromptSelectorProps = {
   selectedPromptId: string;
   onPromptChange: (promptId: string) => void;
+  showDescription?: boolean;
 };
 
 export default function SystemPromptSelector({
   selectedPromptId,
   onPromptChange,
+  showDescription = true,
 }: SystemPromptSelectorProps) {
   const selectedPrompt = PREDEFINED_PROMPTS.find(
     (p) => p.id === selectedPromptId
@@ -49,7 +51,7 @@ export default function SystemPromptSelector({
         <ChevronDown className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none' />
       </div>
 
-      {selectedPrompt && (
+      {showDescription && selectedPrompt && (
         <div className='flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'>
           <selectedPrompt.icon className='w-4 h-4 text-blue-600 dark:text-blue-400' />
           <span className='text-xs text-blue-700 dark:text-blue-300'>

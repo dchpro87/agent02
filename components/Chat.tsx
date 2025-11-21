@@ -94,6 +94,7 @@ export default function Chat() {
             message: inputValue,
             model: selectedModel,
           }),
+          signal: controller.signal,
         });
 
         if (!queryResponse.ok) {
@@ -112,6 +113,7 @@ export default function Chat() {
           body: JSON.stringify({
             text: searchQuery,
           }),
+          signal: controller.signal,
         });
 
         if (!embeddingResponse.ok) {
@@ -132,6 +134,7 @@ export default function Chat() {
             queryEmbeddings: [embedding],
             nResults: 5,
           }),
+          signal: controller.signal,
         });
 
         if (!chromaResponse.ok) {
@@ -154,6 +157,13 @@ export default function Chat() {
           }
         }
       } catch (error) {
+        // Check if the error is due to abort
+        if (error instanceof Error && error.name === "AbortError") {
+          console.log("RAG flow aborted by user");
+          setIsQueryingKnowledge(false);
+          setAbortController(null);
+          return; // Exit early, don't send message
+        }
         console.error("Error in RAG flow:", error);
         // Continue without context if RAG fails
       } finally {
@@ -224,8 +234,9 @@ User question: ${inputValue}`;
     <div className='flex flex-col h-screen bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-900 dark:to-black'>
       {/* Header */}
       <header className='border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm'>
-        <div className='max-w-4xl mx-auto px-4 py-4'>
-          <div className='flex items-center justify-between'>
+        <div className='max-w-4xl mx-auto px-4 py-3'>
+          <div className='flex items-center justify-between gap-4'>
+            {/* Logo and Title */}
             <div className='flex items-center gap-3'>
               <div className='w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center'>
                 <Bot className='w-6 h-6 text-white' />
@@ -234,15 +245,32 @@ User question: ${inputValue}`;
                 <h1 className='text-xl font-semibold text-zinc-900 dark:text-zinc-100'>
                   AI Monkey
                 </h1>
-                <p className='text-sm text-zinc-500 dark:text-zinc-400'>
+                <p className='text-xs text-zinc-500 dark:text-zinc-400'>
                   Powered by Ollama
                 </p>
               </div>
             </div>
-            <div className='flex items-center gap-3'>
+
+            {/* System Prompt and Model Selection */}
+            <div className='flex items-center gap-2 flex-1 justify-center'>
+              <SystemPromptSelector
+                selectedPromptId={selectedPromptId}
+                onPromptChange={setSelectedPromptId}
+                showDescription={false}
+              />
+              <ModelSelector
+                models={models}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                isLoading={isLoadingModels}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className='flex items-center gap-2'>
               <button
                 onClick={() => setShowContextManager(!showContextManager)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                   showContextManager
                     ? "bg-blue-500 hover:bg-blue-600 text-white"
                     : "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
@@ -252,35 +280,44 @@ User question: ${inputValue}`;
                 }
               >
                 <Database className='w-4 h-4' />
-                <span className='text-sm font-medium'>Context</span>
                 {selectedCollection && (
                   <span className='w-2 h-2 rounded-full bg-green-400 animate-pulse'></span>
                 )}
               </button>
               <button
                 onClick={handleReset}
-                className='flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors'
+                className='flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors'
                 title='Reset conversation'
               >
                 <RotateCcw className='w-4 h-4' />
-                <span className='text-sm font-medium'>Reset</span>
               </button>
             </div>
           </div>
 
-          {/* System Prompt and Model Selection Row */}
-          <div className='flex items-center gap-3 px-4 pb-3'>
-            <SystemPromptSelector
-              selectedPromptId={selectedPromptId}
-              onPromptChange={setSelectedPromptId}
-            />
-            <ModelSelector
-              models={models}
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              isLoading={isLoadingModels}
-            />
-          </div>
+          {/* System Prompt Description */}
+          {PREDEFINED_PROMPTS.find((p) => p.id === selectedPromptId) && (
+            <div className='mt-2 flex justify-center'>
+              <div className='flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'>
+                {(() => {
+                  const selectedPrompt = PREDEFINED_PROMPTS.find(
+                    (p) => p.id === selectedPromptId
+                  );
+                  return (
+                    <>
+                      {selectedPrompt && (
+                        <>
+                          <selectedPrompt.icon className='w-4 h-4 text-blue-600 dark:text-blue-400' />
+                          <span className='text-xs text-blue-700 dark:text-blue-300'>
+                            {selectedPrompt.description}
+                          </span>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       </header>
 

@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { embed, embedMany } from 'ai';
-import { createOllama } from 'ollama-ai-provider-v2';
-import { OLLAMA_BASE_URL, DEFAULT_EMBEDDING_MODEL } from '@/constants';
+import { NextRequest, NextResponse } from "next/server";
+import { embed, embedMany } from "ai";
+import { createOllama } from "ollama-ai-provider-v2";
+import { OLLAMA_BASE_URL, DEFAULT_EMBEDDING_MODEL } from "@/constants";
 
 const ollama = createOllama({
   baseURL: OLLAMA_BASE_URL,
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
       if (texts.length === 0) {
         return NextResponse.json(
-          { error: 'Texts array cannot be empty' },
+          { error: "Texts array cannot be empty" },
           { status: 400 }
         );
       }
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         model: ollama.textEmbeddingModel(DEFAULT_EMBEDDING_MODEL),
         values: texts,
         maxParallelCalls: 3, // Process up to 3 embeddings in parallel
+        abortSignal: request.signal,
       });
 
       const duration = Date.now() - startTime;
@@ -55,6 +56,7 @@ export async function POST(request: NextRequest) {
       const { embedding } = await embed({
         model: ollama.textEmbeddingModel(DEFAULT_EMBEDDING_MODEL),
         value: text,
+        abortSignal: request.signal,
       });
 
       console.log(
@@ -69,25 +71,25 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('[Embedding API] Error:', error);
+    console.error("[Embedding API] Error:", error);
     console.error(
-      '[Embedding API] Error stack:',
-      error instanceof Error ? error.stack : 'No stack trace'
+      "[Embedding API] Error stack:",
+      error instanceof Error ? error.stack : "No stack trace"
     );
 
     // Provide more detailed error message
-    let errorMessage = 'Failed to generate embedding';
+    let errorMessage = "Failed to generate embedding";
     if (error instanceof Error) {
       errorMessage = error.message;
 
       // Check for specific error types
-      if (error.message.includes('ECONNREFUSED')) {
+      if (error.message.includes("ECONNREFUSED")) {
         errorMessage =
-          'Cannot connect to Ollama server. Please ensure Ollama is running.';
-      } else if (error.message.includes('model')) {
+          "Cannot connect to Ollama server. Please ensure Ollama is running.";
+      } else if (error.message.includes("model")) {
         errorMessage = `Model error: ${error.message}. Please ensure '${DEFAULT_EMBEDDING_MODEL}' is available in Ollama.`;
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'Request timeout. The embedding request took too long.';
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "Request timeout. The embedding request took too long.";
       }
     }
 

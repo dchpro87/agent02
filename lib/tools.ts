@@ -17,7 +17,10 @@ const chromaClient = new ChromaClient({
  * Tool to retrieve additional contextual information from ChromaDB knowledge base.
  * Queries a specified collection using semantic search to find relevant documents.
  */
-export const createGetAdditionalContextTool = (defaultCollection?: string) =>
+export const createGetAdditionalContextTool = (
+  defaultCollection?: string,
+  abortSignal?: AbortSignal
+) =>
   tool({
     description:
       "Retrieve additional contextual information from the knowledge base by querying a semantic search query. Use this when you need more information about a topic that might be stored in the document collections.",
@@ -38,6 +41,7 @@ export const createGetAdditionalContextTool = (defaultCollection?: string) =>
         const { embedding } = await embed({
           model: ollama.textEmbeddingModel(DEFAULT_EMBEDDING_MODEL),
           value: query,
+          abortSignal,
         });
 
         // Query the ChromaDB collection

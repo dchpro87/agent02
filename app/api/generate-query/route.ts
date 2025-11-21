@@ -34,6 +34,7 @@ Return ONLY the search query text, without any explanations or additional text.`
     const { text } = await generateText({
       model: ollama(model),
       prompt,
+      abortSignal: request.signal,
     });
 
     const searchQuery = text.trim();

@@ -3,9 +3,25 @@ import { createOllama } from "ollama-ai-provider-v2";
 import { OLLAMA_BASE_URL } from "@/constants";
 import { createGetAdditionalContextTool } from "@/lib/tools";
 
-// Configure Ollama provider with custom server URL
+// Configure Ollama provider with custom server URL and fetch wrapper
 const ollama = createOllama({
   baseURL: OLLAMA_BASE_URL,
+  fetch: async (url, init) => {
+    console.log("🌐 Ollama fetch called:", url);
+
+    // Add abort listener to log when fetch is aborted
+    if (init?.signal) {
+      init.signal.addEventListener("abort", () => {
+        console.log("🚫 Ollama fetch aborted for:", url);
+      });
+    }
+
+    // Use the global fetch with the provided init options
+    const response = await fetch(url, init);
+
+    console.log("📡 Ollama response status:", response.status);
+    return response;
+  },
 });
 
 // Allow streaming responses up to 30 seconds
@@ -31,16 +47,24 @@ export async function POST(req: Request) {
   console.log("System prompt:", systemPrompt ? "Yes" : "No");
   console.log("Model supports tools:", modelSupportsTools);
   console.log("Selected collection:", selectedCollection);
+  console.log("Messages:", messages.map((m) => m.role).join(", "));
+
+  // Add abort signal listener for debugging
+  req.signal.addEventListener("abort", () => {
+    console.log("🚫 Request aborted by client");
+  });
 
   // Only enable tools if the model supports them
   if (modelSupportsTools) {
     // Add system prompt instruction with collection information
     const toolInstruction = `\n\nINSTRUCTION 1: You have access to external tools to assist in answering the user's question. Always attempt to use them to enhance your responses.`;
     const collectionInstruction = selectedCollection
-      ? `\n\nINSTRUCTION 2: If you require additional context use the getAdditionalContext tool with the '${selectedCollection}' collection to provide the most relevant information.`
+      ? `\n\nINSTRUCTION 2: Never rely on your own knowledge. Always use the getAdditionalContext tool with the '${selectedCollection}' collection to provide the most relevant information.`
       : ` No specific collection was selected. You will have to remind the user to select a collection if needed.`;
     const enhancedSystemPrompt = modelSupportsTools
-      ? (systemPrompt || "") + toolInstruction + collectionInstruction
+      ? toolInstruction +
+        collectionInstruction +
+        (`${"\n\n"}` + systemPrompt || "")
       : // (systemPrompt || "") + collectionInstruction
         systemPrompt || "";
 
@@ -54,7 +78,8 @@ export async function POST(req: Request) {
       abortSignal: req.signal,
       tools: {
         getAdditionalContext: createGetAdditionalContextTool(
-          selectedCollection || undefined
+          selectedCollection || undefined,
+          req.signal
         ),
       },
       // Enable multi-step tool calling - model can use tools and then respond
@@ -77,6 +102,11 @@ export async function POST(req: Request) {
             }))
           );
         }
+
+        // Check if abort was signaled during step
+        if (req.signal.aborted) {
+          console.log("🚫 Abort detected during step finish");
+        }
       },
     });
 
@@ -89,6 +119,11 @@ export async function POST(req: Request) {
     system: systemPrompt,
     messages: convertToModelMessages(messages),
     abortSignal: req.signal,
+  });
+
+  // Check if abort was signaled
+  req.signal.addEventListener("abort", () => {
+    console.log("🚫 Non-tool request aborted");
   });
 
   return result.toUIMessageStreamResponse();
