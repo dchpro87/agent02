@@ -56,17 +56,32 @@ export async function POST(req: Request) {
 
   // Only enable tools if the model supports them
   if (modelSupportsTools) {
-    // Add system prompt instruction with collection information
-    const toolInstruction = `\n\nINSTRUCTION 1: You have access to external tools to assist in answering the user's question. Always attempt to use them to enhance your responses.`;
+    // Add system prompt instruction with collection informationa and current date time
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    };
+    const dateStr = now.toLocaleDateString("en-US", options);
+    const timeStr = now.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const currentDateTime = `Today's date is ${dateStr} and the time is ${timeStr}`;
+    const toolInstruction = `\n\nINSTRUCTION 1: you have access to external tools to assist in answering the user's question. Always attempt to use them to enhance your responses.`;
     const collectionInstruction = selectedCollection
       ? `\n\nINSTRUCTION 2: Never rely on your own knowledge. Always use the getAdditionalContext tool with the '${selectedCollection}' collection to provide the most relevant information.`
       : ` No specific collection was selected. You will have to remind the user to select a collection if needed.`;
     const enhancedSystemPrompt = modelSupportsTools
-      ? toolInstruction +
+      ? currentDateTime +
+        toolInstruction +
         collectionInstruction +
         (`${"\n\n"}` + systemPrompt || "")
       : // (systemPrompt || "") + collectionInstruction
-        systemPrompt || "";
+        currentDateTime + (systemPrompt || "");
 
     console.log("Enhanced system prompt for tool usage:", enhancedSystemPrompt);
 

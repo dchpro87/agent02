@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { UIMessage } from "ai";
+import MarkdownMessage from "./MarkdownMessage";
 
 type MessagePart = {
   type: string;
@@ -320,7 +321,11 @@ export default function MessageContainer({
                     parts={getReasoningPartsAfterTools(message)}
                   />
                 )}
-              <p className='whitespace-pre-wrap'>{getMessageText(message)}</p>
+              {message.role === "assistant" ? (
+                <MarkdownMessage content={getMessageText(message)} />
+              ) : (
+                <p className='whitespace-pre-wrap'>{getMessageText(message)}</p>
+              )}
             </div>
 
             {message.role === "user" && (
