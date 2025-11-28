@@ -3,6 +3,12 @@ import { createOllama } from "ollama-ai-provider-v2";
 import { OLLAMA_BASE_URL } from "@/constants";
 import { createGetAdditionalContextTool } from "@/lib/tools";
 
+type Attachment = {
+  name: string;
+  contentType: string;
+  url: string;
+};
+
 // Configure Ollama provider with custom server URL and fetch wrapper
 const ollama = createOllama({
   baseURL: OLLAMA_BASE_URL,
@@ -28,6 +34,7 @@ const ollama = createOllama({
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const body = await req.json();
   const {
     messages,
     model,
@@ -40,7 +47,10 @@ export async function POST(req: Request) {
     systemPrompt?: string;
     modelSupportsTools?: boolean;
     selectedCollection?: string | null;
-  } = await req.json();
+  } = body;
+
+  // Extract experimental_attachments if present
+  const attachments = body.experimental_attachments as Attachment[] | undefined;
 
   console.log("\n\n--- 💥New chat request💥 ---");
   console.log("Model:", model);
@@ -48,11 +58,53 @@ export async function POST(req: Request) {
   console.log("Model supports tools:", modelSupportsTools);
   console.log("Selected collection:", selectedCollection);
   console.log("Messages:", messages.map((m) => m.role).join(", "));
+  console.log("Attachments:", attachments?.length || 0);
 
   // Add abort signal listener for debugging
   req.signal.addEventListener("abort", () => {
     console.log("🚫 Request aborted by client");
   });
+
+  // Convert UI messages to model messages
+  const modelMessages = convertToModelMessages(messages);
+
+  // If there are attachments, add them to the last user message
+  if (attachments && attachments.length > 0) {
+    console.log("Processing attachments...");
+    // Find the last user message
+    for (let i = modelMessages.length - 1; i >= 0; i--) {
+      if (modelMessages[i].role === "user") {
+        const lastUserMessage = modelMessages[i];
+        // Convert attachments to image parts
+        const imageParts = attachments.map((attachment) => ({
+          type: "image" as const,
+          image: attachment.url, // data URL from the client
+        }));
+
+        // Combine existing content with image parts
+        if (typeof lastUserMessage.content === "string") {
+          lastUserMessage.content = [
+            ...imageParts,
+            { type: "text" as const, text: lastUserMessage.content },
+          ];
+        } else if (Array.isArray(lastUserMessage.content)) {
+          // Filter to only include compatible part types
+          const compatibleParts = lastUserMessage.content.filter(
+            (part) =>
+              part.type === "text" ||
+              part.type === "image" ||
+              part.type === "file"
+          );
+          lastUserMessage.content = [
+            ...imageParts,
+            ...compatibleParts,
+          ] as typeof lastUserMessage.content;
+        }
+        console.log("Added", imageParts.length, "image(s) to user message");
+        break;
+      }
+    }
+  }
 
   // Only enable tools if the model supports them
   if (modelSupportsTools) {
@@ -89,7 +141,7 @@ export async function POST(req: Request) {
       // model: ollama(model || "granite4"),
       model: ollama(model),
       system: enhancedSystemPrompt,
-      messages: convertToModelMessages(messages),
+      messages: modelMessages,
       abortSignal: req.signal,
       tools: {
         getAdditionalContext: createGetAdditionalContextTool(
@@ -132,7 +184,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: ollama(model),
     system: systemPrompt,
-    messages: convertToModelMessages(messages),
+    messages: modelMessages,
     abortSignal: req.signal,
   });
 

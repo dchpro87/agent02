@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { UIMessage } from "ai";
+import Image from "next/image";
 import MarkdownMessage from "./MarkdownMessage";
 
 type MessagePart = {
@@ -181,6 +182,16 @@ export default function MessageContainer({
     return content;
   };
 
+  const getImageAttachments = (message: UIMessage) => {
+    return message.parts.filter(
+      (part) => "image" in part && part.image
+    ) as unknown as Array<{
+      type: "image";
+      image: string | URL;
+      mimeType?: string;
+    }>;
+  };
+
   const getReasoningPartsBeforeTools = (message: UIMessage) => {
     const reasoningParts: MessagePart[] = [];
 
@@ -321,6 +332,26 @@ export default function MessageContainer({
                     parts={getReasoningPartsAfterTools(message)}
                   />
                 )}
+              {/* Display image attachments */}
+              {getImageAttachments(message).length > 0 && (
+                <div className='mb-3 space-y-2'>
+                  {getImageAttachments(message).map((img, idx) => (
+                    <Image
+                      key={idx}
+                      src={
+                        typeof img.image === "string"
+                          ? img.image
+                          : img.image.toString()
+                      }
+                      alt={`Attachment ${idx + 1}`}
+                      width={500}
+                      height={256}
+                      className='max-w-full h-auto max-h-64 rounded-lg border border-zinc-200 dark:border-zinc-700 object-contain'
+                      unoptimized
+                    />
+                  ))}
+                </div>
+              )}
               {message.role === "assistant" ? (
                 <MarkdownMessage content={getMessageText(message)} />
               ) : (

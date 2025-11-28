@@ -25,6 +25,11 @@ export default function Chat() {
     null
   );
   const [isQueryingKnowledge, setIsQueryingKnowledge] = useState(false);
+  const [imageAttachment, setImageAttachment] = useState<{
+    url: string;
+    name: string;
+    type: string;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
@@ -198,7 +203,22 @@ User question: ${inputValue}`;
     //     "\n\nYou have access to external tools to assist in answering the user's question. Use them as needed.";
     // }
 
+    // Prepare experimental_attachments for multi-modal support
+    const attachments = imageAttachment
+      ? [
+          {
+            name: imageAttachment.name,
+            contentType: imageAttachment.type,
+            url: imageAttachment.url,
+          },
+        ]
+      : undefined;
+
+    // Store current image for adding to message after send
+    const currentImage = imageAttachment ? { ...imageAttachment } : null;
+
     // Send message to LLM with model capabilities and collection info
+    // Note: we pass attachments in the body to be handled by the route
     sendMessage(
       { text: messageText },
       {
@@ -207,10 +227,48 @@ User question: ${inputValue}`;
           systemPrompt: selectedPrompt?.prompt,
           modelSupportsTools,
           selectedCollection,
+          experimental_attachments: attachments,
         },
       }
     );
+
+    // Add image part to the user message that was just added
+    if (currentImage) {
+      // Use a short timeout to ensure the message has been added to the array
+      setTimeout(() => {
+        setMessages((currentMessages) => {
+          if (currentMessages.length === 0) return currentMessages;
+
+          const updatedMessages = [...currentMessages];
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+          // Only update if it's a user message
+          if (lastMessage.role === "user") {
+            // Check if image already exists
+            const hasImage = lastMessage.parts.some(
+              (p) => "image" in p && p.image
+            );
+
+            if (!hasImage) {
+              // Add image part at the beginning
+              // Using type assertion since the type system doesn't include image parts
+              lastMessage.parts = [
+                {
+                  type: "image" as "text",
+                  image: currentImage.url,
+                } as unknown as (typeof lastMessage.parts)[0],
+                ...lastMessage.parts,
+              ];
+            }
+          }
+
+          return updatedMessages;
+        });
+      }, 50);
+    }
+
     setInputValue("");
+    setImageAttachment(null); // Clear image after sending
   };
 
   const handleCancel = () => {
@@ -339,6 +397,9 @@ User question: ${inputValue}`;
             status={status}
             inputRef={inputRef}
             isProcessing={status !== "ready" && status !== "error"}
+            imageAttachment={imageAttachment}
+            onImageAttach={setImageAttachment}
+            onImageRemove={() => setImageAttachment(null)}
           />
         </div>
 
