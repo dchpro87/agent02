@@ -4,6 +4,7 @@ import { embed } from "ai";
 import { createOllama } from "ollama-ai-provider-v2";
 import { OLLAMA_BASE_URL, DEFAULT_EMBEDDING_MODEL } from "@/constants";
 import { ChromaClient } from "chromadb";
+import { getJson } from "serpapi";
 
 const ollama = createOllama({
   baseURL: OLLAMA_BASE_URL,
@@ -121,6 +122,110 @@ export const createGetAdditionalContextTool = (
               ? error.message
               : "Failed to retrieve context from knowledge base",
           collectionName,
+          query,
+        };
+      }
+    },
+  });
+
+/**
+ * Tool to perform web searches using SerpAPI.
+ * Searches Google and returns relevant organic results with titles, links, and snippets.
+ */
+export const createWebSearchTool = () =>
+  tool({
+    description:
+      "Search the web for current information, news, articles, or any topic not in the knowledge base. Use this when you need up-to-date information from the internet.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe(
+          "The search query to look up on the web (e.g., 'latest AI developments', 'weather in Paris', 'TypeScript best practices 2024')"
+        ),
+      numResults: z
+        .number()
+        .optional()
+        .default(5)
+        .describe("Number of search results to return (1-10, default: 5)"),
+    }),
+    execute: async ({ query, numResults = 5 }) => {
+      console.log(`🔍 webSearch called with query: '${query}'`);
+
+      // Validate numResults
+      const validNumResults = Math.min(Math.max(numResults, 1), 10);
+
+      try {
+        // Get API key from environment
+        const apiKey = process.env.SERP_API_KEY;
+        if (!apiKey) {
+          return {
+            success: false,
+            error: "SERP_API_KEY is not configured in environment variables",
+            query,
+          };
+        }
+
+        // Perform the search using SerpAPI
+        const response = await getJson({
+          engine: "google",
+          api_key: apiKey,
+          q: query,
+          num: validNumResults,
+        });
+
+        // Extract organic results
+        const organicResults = response.organic_results || [];
+
+        if (organicResults.length === 0) {
+          return {
+            success: false,
+            message: `No search results found for query: '${query}'`,
+            query,
+            results: [],
+          };
+        }
+
+        // Format the results
+        const formattedResults = organicResults
+          .slice(0, validNumResults)
+          .map(
+            (result: {
+              position?: number;
+              title?: string;
+              link?: string;
+              snippet?: string;
+              displayed_link?: string;
+            }) => ({
+              position: result.position,
+              title: result.title || "No title",
+              link: result.link || "",
+              snippet: result.snippet || "No description available",
+              displayedLink: result.displayed_link || result.link || "",
+            })
+          );
+
+        console.log(
+          `✅ Web search completed: ${formattedResults.length} results found`
+        );
+
+        return {
+          success: true,
+          query,
+          resultCount: formattedResults.length,
+          results: formattedResults,
+          searchMetadata: {
+            searchTime: response.search_metadata?.total_time_taken,
+            searchId: response.search_metadata?.id,
+          },
+        };
+      } catch (error) {
+        console.error("webSearch error:", error);
+        return {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to perform web search",
           query,
         };
       }

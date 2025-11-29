@@ -1,7 +1,10 @@
 import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
 import { createOllama } from "ollama-ai-provider-v2";
 import { OLLAMA_BASE_URL } from "@/constants";
-import { createGetAdditionalContextTool } from "@/lib/tools";
+import {
+  createGetAdditionalContextTool,
+  createWebSearchTool,
+} from "@/lib/tools";
 
 type Attachment = {
   name: string;
@@ -148,6 +151,7 @@ export async function POST(req: Request) {
           selectedCollection || undefined,
           req.signal
         ),
+        webSearch: createWebSearchTool(req.signal),
       },
       // Enable multi-step tool calling - model can use tools and then respond
       stopWhen: stepCountIs(5),
